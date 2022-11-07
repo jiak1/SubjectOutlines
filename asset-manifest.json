@@ -1,14 +1,14 @@
 {
   "files": {
-    "main.css": "/static/css/main.e85101f1.css",
-    "main.js": "/static/js/main.eda63f37.js",
+    "main.css": "/static/css/main.15315fa8.css",
+    "main.js": "/static/js/main.ea6594ec.js",
     "index.html": "/index.html",
     "static/media/exclamation.svg": "/static/media/exclamation.76e05a7e823a1fe56809301ea63aa57f.svg",
-    "main.e85101f1.css.map": "/static/css/main.e85101f1.css.map",
-    "main.eda63f37.js.map": "/static/js/main.eda63f37.js.map"
+    "main.15315fa8.css.map": "/static/css/main.15315fa8.css.map",
+    "main.ea6594ec.js.map": "/static/js/main.ea6594ec.js.map"
   },
   "entrypoints": [
-    "static/css/main.e85101f1.css",
-    "static/js/main.eda63f37.js"
+    "static/css/main.15315fa8.css",
+    "static/js/main.ea6594ec.js"
   ]
 }
