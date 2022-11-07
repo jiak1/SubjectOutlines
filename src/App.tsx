@@ -40,7 +40,7 @@ function getRecentYears() {
 }
 
 function App() {
-	const [code, setCode] = useState('31927')
+	const [code, setCode] = useState('')
 	const [session, setSession] = useState('AUT')
 	const [year, setYear] = useState('2022')
 
