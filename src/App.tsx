@@ -3,7 +3,10 @@ import { useEffect, useState } from 'react'
 import axios from 'axios'
 import { useMutation } from 'react-query'
 import './App.css'
+import Fuse from 'fuse.js'
 import exclamation from './exclamation.svg'
+import suggestions from './suggestions.json'
+import throttle from 'lodash.throttle'
 
 interface MutationVariables {
 	code: string
@@ -13,9 +16,13 @@ interface MutationVariables {
 
 const today = new Date()
 
+function getNormalURL(code: string, session: string, year: string) {
+	return `https://cis-admin-api.uts.edu.au/subject-outlines/index.cfm/PDFs?lastGenerated=true&lastGenerated=true&subjectCode=${code}&year=${year}&session=${session}&mode=standard&location=city#view=FitH`
+}
+
 function getCORSSafeURL(code: string, session: string, year: string) {
 	return `https://allorigin.jackdonaldson.net/raw?url=${encodeURIComponent(
-		`https://cis-admin-api.uts.edu.au/subject-outlines/index.cfm/PDFs?lastGenerated=true&lastGenerated=true&subjectCode=${code}&year=${year}&session=${session}&mode=standard&location=city#view=FitH`
+		getNormalURL(code, session, year)
 	)}`
 }
 
@@ -39,17 +46,49 @@ function getRecentYears() {
 	return years
 }
 
+function mutationCallback(
+	mutator: any,
+	code: string,
+	session: string,
+	year: string
+) {
+	mutator.mutate({ code, session, year })
+}
+
+const mutationThrottle = throttle(mutationCallback, 800)
+
+const fuse = new Fuse(suggestions['subjects'], {
+	includeScore: true,
+	minMatchCharLength: 2,
+	shouldSort: true,
+	keys: [
+		{ name: 'name', weight: 0.3 },
+		{ name: 'code', weight: 0.7 },
+	],
+})
+
+const yearOptions = getRecentYears()
+
+function searchCallback(
+	code: string,
+	setSearchResults: React.Dispatch<React.SetStateAction<any>>
+) {
+	setSearchResults(fuse.search(code, { limit: 8 }))
+}
+
+const searchThrottle = throttle(searchCallback, 600)
+
 function App() {
+	const outlineQuery = useOutlineMutation()
+
+	const [isTyping, setIsTyping] = useState(false)
 	const [code, setCode] = useState('')
 	const [session, setSession] = useState('AUT')
 	const [year, setYear] = useState('2022')
-
-	const outlineQuery = useOutlineMutation()
-
-	const yearOptions = getRecentYears()
+	const [searchResults, setSearchResults] = useState([])
 
 	useEffect(() => {
-		outlineQuery.mutate({ code, session, year })
+		mutationThrottle(outlineQuery, code, session, year)
 	}, [code, session, year])
 
 	return (
@@ -69,12 +108,11 @@ function App() {
 									onChange={(e) => {
 										setYear(e.target.value)
 									}}
+									value={year}
 									className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5 outline-none"
 								>
 									{yearOptions.map((year) => (
-										<option selected={year === today.getFullYear()}>
-											{year}
-										</option>
+										<option key={year}>{year}</option>
 									))}
 								</select>
 							</div>
@@ -83,8 +121,8 @@ function App() {
 									Session
 								</label>
 								<select
+									value={session}
 									onChange={(e) => {
-										console.log('setting session')
 										setSession(e.target.value)
 									}}
 									className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5 outline-none"
@@ -102,11 +140,26 @@ function App() {
 							<input
 								type="search"
 								id="search-dropdown"
+								onBlur={() => {
+									setTimeout(() => {
+										setIsTyping(false)
+									}, 500)
+								}}
+								onSelect={() => {
+									setIsTyping(true)
+								}}
+								onFocus={() => {
+									setIsTyping(true)
+								}}
+								onInput={() => {
+									setIsTyping(true)
+								}}
 								className="transition-all block p-2.5 w-full z-20 text-sm text-gray-900 bg-gray-50 rounded-lg border border-gray-300 focus:border-primary outline-none"
 								placeholder="Search subject code..."
 								value={code}
 								onChange={(e) => {
 									setCode(e.target.value)
+									searchThrottle(e.target.value, setSearchResults)
 								}}
 								required
 							/>
@@ -125,15 +178,25 @@ function App() {
 									viewBox="0 0 24 24"
 									xmlns="http://www.w3.org/2000/svg"
 								>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-									></path>
+									<path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
 								</svg>
 								<span className="sr-only">Search</span>
 							</button>
+							{isTyping && searchResults.length > 0 && (
+								<div className="w-full absolute top-12 left-0 bg-gray-50 rounded-lg border border-gray-200 flex flex-col p-1 z-10">
+									{searchResults.map((subject: any) => (
+										<button
+											key={subject['item']['code']}
+											onClick={() => {
+												setCode(subject['item']['code'])
+											}}
+											className="w-full hover:bg-gray-200 rounded-sm p-1 active:bg-gray-300 transition-all"
+										>
+											{`(${subject['item']['code']}) ${subject['item']['name']}`}
+										</button>
+									))}
+								</div>
+							)}
 						</div>
 					</div>
 					{code !== '' && outlineQuery.isLoading && (
@@ -159,14 +222,26 @@ function App() {
 					)}
 
 					{code !== '' && outlineQuery.isSuccess && (
-						<div className=" bg-dark rounded-xl p-4 m-4 mt-8 sm:mt-4">
-							<iframe
-								title="Subject Outline"
-								className="w-full h-full min-h-[400px] md:min-h-[600px]"
-								src={getCORSSafeURL(code, session, year)}
-								onLoad={(e) => {}}
-							/>
-						</div>
+						<>
+							<div className=" bg-dark rounded-xl p-4 m-4 mt-8 sm:mt-4">
+								<iframe
+									title="Subject Outline"
+									className="w-full h-full min-h-[400px] md:min-h-[600px]"
+									src={getCORSSafeURL(code, session, year)}
+									onLoad={(e) => {}}
+								/>
+							</div>
+							<div className="ml-auto mr-auto w-fit block">
+								<a
+									className="text-center mt-4 font-medium text-white bg-primary p-2 rounded-lg"
+									target="_blank"
+									href={getNormalURL(code, session, year)}
+									rel="noreferrer"
+								>
+									Open In New Tab
+								</a>
+							</div>
+						</>
 					)}
 
 					{code !== '' && outlineQuery.isError && (
@@ -181,6 +256,9 @@ function App() {
 							<h1 className="text-2xl text-center mt-4 font-medium text-primary">
 								Subject Outline Cannot Be Found!
 							</h1>
+							<h2 className="text-center mt-2 text-primary">
+								Double check the year & session are correct
+							</h2>
 						</div>
 					)}
 				</div>
